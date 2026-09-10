@@ -1,4 +1,4 @@
-﻿const fs = require('fs');
+import fs from 'fs';
 const file = 'dist/server/wrangler.json';
 if (fs.existsSync(file)) {
   let content = fs.readFileSync(file, 'utf8');
