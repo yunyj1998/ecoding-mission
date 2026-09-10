@@ -162,6 +162,6 @@ export async function POST(req:Request){
     return fail('동시 요청이 많습니다. 잠시 후 다시 시도하세요.',409);
   }catch(e){
     console.error(e);
-    return fail('요청을 처리하지 못했습니다. 다시 시도하세요.',503);
+    return fail('DB 에러 상세: ' + (e?.message || e?.toString() || JSON.stringify(e)), 503);
   }
 }
