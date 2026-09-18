@@ -8,3 +8,5 @@ export const mazePaths=[[0,1,7,13,12,18,24,25,26,20,14,15,9,3,4,5,11,17,16,22,28
 export const complexRules=['자름','일련번호 끝 짝수','별이 있으면 자름','자르지 않음','자름','별이 있으면 자름','일련번호 끝 짝수','자르지 않음'];
 export const teamNames=['ALPHA','BRAVO','CHARLIE','DELTA','ECHO','FOXTROT','GOLF','HOTEL'];
 export function timeText(ms:number){const sec=Math.max(0,Math.ceil(ms/1000));return `${Math.floor(sec/60).toString().padStart(2,'0')}:${(sec%60).toString().padStart(2,'0')}`}
+
+export const missionMazePaths = [...mazePaths, ...mazePaths.map(path=>path.map(i=>Math.floor(i/6)*6+5-i%6))];
