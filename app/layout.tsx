@@ -1,5 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+
+export const viewport: Viewport = {width:"device-width",initialScale:1,viewportFit:"cover",themeColor:"#081419"};
 
 export const metadata: Metadata = {
   title: "디코딩 미션 | 팀 커뮤니케이션 워크숍",

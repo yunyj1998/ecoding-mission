@@ -54,13 +54,14 @@ export function useWorkshop(id: string) {
 let context: AudioContext | undefined;
 export function sound(kind: 'error' | 'solved' | 'win' | 'tap') {
   try {
-    context ??= new AudioContext(); void context.resume(); const ctx = context;
+    context ??= new AudioContext(); void context.resume().catch(() => {}); const ctx = context;
     const notes = kind === 'error' ? [130, 95] : kind === 'win' ? [523, 659, 784, 1047] : kind === 'solved' ? [900, 1350] : [500];
     notes.forEach((hz, i) => {
       const osc = ctx.createOscillator(), gain = ctx.createGain(), t = ctx.currentTime + i * .14;
       osc.type = kind === 'error' ? 'sawtooth' : 'sine'; osc.frequency.value = hz;
       gain.gain.setValueAtTime(.08, t); gain.gain.exponentialRampToValueAtTime(.001, t + .19);
       osc.connect(gain); gain.connect(ctx.destination); osc.start(t); osc.stop(t + .2);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
     });
   } catch { /* Visual feedback remains available when audio is unsupported. */ }
 }
