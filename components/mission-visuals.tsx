@@ -1,8 +1,8 @@
 import {glyphNames} from '@/lib/mission-content';
 
 const wordplayCircles:Record<string,{name:string,color:string}>={
-  red:{name:'빨간색',color:'#f0444d'},blue:{name:'파란색',color:'#2767e8'},
-  green:{name:'초록색',color:'#55bd55'},yellow:{name:'노란색',color:'#f5d529'}
+  red:{name:'빨간색',color:'#ff2020'},blue:{name:'파란색',color:'#006dff'},
+  green:{name:'초록색',color:'#00d84a'},yellow:{name:'노란색',color:'#ffe600'}
 };
 const wordplayArrows:Record<string,{name:string,glyph:string}>={
   nw:{name:'왼쪽 위',glyph:'↖'},ne:{name:'오른쪽 위',glyph:'↗'},
@@ -13,6 +13,7 @@ export function wordplayLabel(value:string){
   const [kind,key]=value.split(':');
   if(kind==='@circle'&&wordplayCircles[key])return `${wordplayCircles[key].name} 동그라미 도형`;
   if(kind==='@arrow'&&wordplayArrows[key])return `${wordplayArrows[key].name} 방향 화살표`;
+  if(kind==='@position')return `붉은 네모 숫자 ${key}`;
   return value||'실제 빈칸';
 }
 
@@ -20,6 +21,7 @@ export function WordplayMark({value}:{value:string}){
   const [kind,key]=value.split(':');
   if(kind==='@circle'&&wordplayCircles[key])return <svg className="wordplay-dot" width="34" height="34" viewBox="0 0 34 34" role="img" aria-label={wordplayLabel(value)}><circle cx="17" cy="17" r="15" fill={wordplayCircles[key].color} stroke="rgba(255,255,255,.6)" strokeWidth="1"/></svg>;
   if(kind==='@arrow'&&wordplayArrows[key])return <span className="wordplay-arrow" role="img" aria-label={wordplayLabel(value)}>{wordplayArrows[key].glyph}</span>;
+  if(kind==='@position')return <span className="wordplay-position" role="img" aria-label={wordplayLabel(value)}>{key}</span>;
   if(!value)return <span className="wordplay-empty" aria-label="실제 빈칸"/>;
   return <span>{value}</span>;
 }

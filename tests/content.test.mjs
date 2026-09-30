@@ -9,7 +9,8 @@ for(let seed=0;seed<100;seed++)for(let round=1;round<=9;round++)for(const m of m
  const serial=seed%2?'KVO123':'KVO124';let steps=0;
  if(m.type==='maze'){const pub=publicModule(m);assert.ok(!('map'in pub));assert.notEqual(m.position,m.goal);assert.ok(!pub.markers.includes(m.position)&&!pub.markers.includes(m.goal));starts.add(m.position);goals.add(m.goal);assert.ok(Math.abs(mazeRoute(wallMazes[m.map],m.position,m.goal).length-1)>=8)}
  if(m.type==='symbols'){assert.equal(glyphColumns.filter(c=>m.symbols.every(x=>c.includes(x))).length,1);variants.add(m.symbols.slice().sort().join(','))}
- while(!m.done&&steps++<60){const pub=publicModule(m);let choices=m.type==='button'?['tap','double','hold']:m.type==='wire'?m.colors.map((_,i)=>i):m.type==='symbols'?m.symbols:m.type==='morse'?(m.options?m.options.map((_,i)=>i):[m.word]):m.type==='music'?pub.choices:m.type==='memory'?[0,1,2,3]:m.type==='words'?pub.choices:m.type==='complex'?[0,1,2,3,4,'finish']:[];
+ if(m.type==='words'){assert.equal(new Set(m.columns).size,4);assert.equal(new Set(m.rows).size,4);const circlePositions=m.columns.map((column,stage)=>m.orders[stage].findIndex(row=>wordColumns[column][row].startsWith('@circle:')));assert.equal(new Set(circlePositions).size,4)}
+ while(!m.done&&steps++<60){const pub=publicModule(m);let choices=m.type==='button'?['tap','double','hold']:m.type==='wire'?m.colors.map((_,i)=>i):m.type==='symbols'?m.symbols:m.type==='morse'?(m.options?m.options.map((_,i)=>i):[m.word]):m.type==='music'?pub.choices:m.type==='memory'?[0,1,2,3]:m.type==='words'?Array.from({length:9},(_,i)=>i):m.type==='complex'?[0,1,2,3,4,'finish']:[];
  if(m.type==='maze'){const path=mazeRoute(wallMazes[m.map],m.position,m.goal),next=path[1],diff=next-m.position;choices=[diff===1?'right':diff===-1?'left':diff===6?'down':'up']}
  let selected=false;for(const a of choices){const trial=structuredClone(m);if(answer(trial,a,serial)){Object.assign(m,trial);selected=true;break}}assert.ok(selected,`${m.type} unsolvable seed ${seed}`)}assert.ok(m.done);tested++;
 }
@@ -40,5 +41,14 @@ assert.equal(answer(morseModule,morseModule.options.indexOf(morseModule.word),'K
 assert.ok(wordColumns.every(column=>column.includes('빈칸')&&column.includes('')));
 assert.ok(wordColumns.every(column=>column.some(value=>value.startsWith('@circle:'))));
 assert.ok(wordColumns.every(column=>column.some(value=>value.startsWith('@arrow:'))));
+assert.ok(wordColumns.every(column=>column.some(value=>value.startsWith('@position:'))));
 assert.ok(wordColumns.every(column=>column.some(value=>/^(왼쪽|오른쪽)/.test(value))));
-console.log('PASS: Morse picture choices hide the answer; every wordplay set includes labeled and truly empty blanks.');
+assert.ok(wordColumns.every(column=>column.length===9&&new Set(column).size===9));
+const wordOrder=[8,7,6,5,4,3,2,1,0];
+const redPosition={type:'words',wordVersion:2,done:false,stage:0,columns:[0],rows:[3],orders:[wordOrder]};
+assert.equal(answer(redPosition,0,'KV1234'),true,'red boxed 1 selects button position 1');
+const arrowDirection={type:'words',wordVersion:2,done:false,stage:0,columns:[0],rows:[6],orders:[wordOrder]};
+assert.equal(answer(arrowDirection,8,'KV1234'),true,'southeast arrow selects bottom-right button');
+const ordinaryLabel={type:'words',wordVersion:2,done:false,stage:0,columns:[0],rows:[0],orders:[wordOrder]};
+assert.equal(answer(ordinaryLabel,8,'KV1234'),true,'ordinary symbol selects the button carrying the matching item');
+console.log('PASS: Morse choices hide the answer; wordplay has distinct stages, moving circles, arrows, red position numbers, and two kinds of blanks.');
