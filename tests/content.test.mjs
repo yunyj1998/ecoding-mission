@@ -2,7 +2,7 @@ import fs from 'node:fs';import ts from 'typescript';import assert from 'node:as
 fs.mkdirSync('work',{recursive:true});
 for(const name of ['engine','rules','mission-content'])fs.writeFileSync('work/'+name+'.mjs',ts.transpileModule(fs.readFileSync('lib/'+name+'.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText.replaceAll("'./rules'","'./rules.mjs'").replaceAll("'./mission-content'","'./mission-content.mjs'"));
 const {makeModules,answer,publicModule}=await import('../work/engine.mjs?current');
-const {missionMazePaths,mazePaths,morse,morsePictures,wordColumns}=await import('../work/rules.mjs');
+const {missionMazePaths,morsePictures,wordColumns}=await import('../work/rules.mjs');
 const {glyphColumns,mazeMarkers,wallMazes,wallMazeMarkers,mazeRoute}=await import('../work/mission-content.mjs');
 const variants=new Set(),starts=new Set(),goals=new Set();let tested=0;
 for(let seed=0;seed<100;seed++)for(let round=1;round<=9;round++)for(const m of makeModules(round,seed)){
