@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Persisted workshop JSON is validated at each action boundary. */
 import { db } from '@/lib/db';
 import { makeModules, publicModule, answer } from '@/lib/engine';
 import { teamNames } from '@/lib/rules';

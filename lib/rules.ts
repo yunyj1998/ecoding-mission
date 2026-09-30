@@ -2,8 +2,21 @@ export const names:Record<string,string>={button:'버튼',wire:'전선',symbols:
 export const rounds=[['button','wire','symbols'],['wire','morse','maze'],['button','symbols','maze','music'],['symbols','music','memory','words'],['wire','morse','maze','complex'],['wire','symbols','maze','memory','words'],['maze','words','music','morse','complex'],['wire','morse','words','music','memory'],['symbols','maze','words','music','memory','complex']];
 export const symbolColumns=[['☀','△','ϟ','Ω','☆','♧'],['Ψ','◇','☾','ϟ','♧','⊕'],['Ω','♢','☀','Ψ','⊕','☯']];
 export const morse:Record<string,string>={A:'.-',B:'-...',C:'-.-.',D:'-..',E:'.',F:'..-.',G:'--.',H:'....',I:'..',J:'.---',K:'-.-',L:'.-..',M:'--',N:'-.',O:'---',P:'.--.',Q:'--.-',R:'.-.',S:'...',T:'-',U:'..-',V:'...-',W:'.--',X:'-..-',Y:'-.--',Z:'--..'};
+export const morsePictures=[
+ {answer:'GAME',symbol:'🎮',label:'게임기'},
+ {answer:'BEER',symbol:'🍺',label:'맥주'},
+ {answer:'SNOW',symbol:'❄️',label:'눈송이'},
+ {answer:'BEE',symbol:'🐝',label:'벌'},
+ {answer:'DOG',symbol:'🐕',label:'강아지'},
+ {answer:'CAT',symbol:'🐈‍⬛',label:'고양이'}
+];
 export const musicMap:Record<string,string>={A:'♩',B:'♪',C:'♫',D:'♬',E:'♭',F:'♯'};
-export const wordColumns=[['노란색','잠깐만','왼쪽 위','빈칸','3번','오른쪽 아래','파란색','누르세요','없는데'],['빨간색','오른쪽 위','아무것도','7번','왼쪽 아래','그거 눌러','초록색','준비','멈춰'],['안 보여','2번','오른쪽 아래','노랑','가운데','다시','8번','위쪽','완료']];
+export const wordColumns=[
+ ['@circle:red','아무것도','오른쪽 위','@arrow:se','노란색','빈칸','잠깐만','7번',''],
+ ['@circle:blue','오른쪽 아래','@arrow:nw','빨간색','그거 눌러','빈칸','안 보여','2번',''],
+ ['@circle:green','왼쪽 아래','@arrow:ne','초록색','누르세요','빈칸','몇 시야?','9번',''],
+ ['@circle:yellow','왼쪽 위','@arrow:sw','파란색','다시','빈칸','없는데?','4번','']
+];
 export const mazePaths=[[0,1,7,13,12,18,24,25,26,20,14,15,9,3,4,5,11,17,16,22,28,29,35],[0,6,12,13,7,8,2,3,9,15,14,20,26,25,31,32,33,27,21,22,16,17,23,29,35],[0,1,2,8,14,13,19,18,24,30,31,25,26,20,21,15,9,10,4,5,11,17,23,22,28,34,35]];
 export const complexRules=['자름','일련번호 끝 짝수','별이 있으면 자름','자르지 않음','자름','별이 있으면 자름','일련번호 끝 짝수','자르지 않음'];
 export const teamNames=['ALPHA','BRAVO','CHARLIE','DELTA','ECHO','FOXTROT','GOLF','HOTEL'];

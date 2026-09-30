@@ -2,14 +2,14 @@ import fs from 'node:fs';import ts from 'typescript';import assert from 'node:as
 fs.mkdirSync('work',{recursive:true});
 for(const name of ['engine','rules','mission-content'])fs.writeFileSync('work/'+name+'.mjs',ts.transpileModule(fs.readFileSync('lib/'+name+'.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText.replaceAll("'./rules'","'./rules.mjs'").replaceAll("'./mission-content'","'./mission-content.mjs'"));
 const {makeModules,answer,publicModule}=await import('../work/engine.mjs?current');
-const {missionMazePaths,mazePaths,morse}=await import('../work/rules.mjs');
+const {missionMazePaths,mazePaths,morse,morsePictures,wordColumns}=await import('../work/rules.mjs');
 const {glyphColumns,mazeMarkers,wallMazes,wallMazeMarkers,mazeRoute}=await import('../work/mission-content.mjs');
 const variants=new Set(),starts=new Set(),goals=new Set();let tested=0;
 for(let seed=0;seed<100;seed++)for(let round=1;round<=9;round++)for(const m of makeModules(round,seed)){
  const serial=seed%2?'KVO123':'KVO124';let steps=0;
  if(m.type==='maze'){const pub=publicModule(m);assert.ok(!('map'in pub));assert.notEqual(m.position,m.goal);assert.ok(!pub.markers.includes(m.position)&&!pub.markers.includes(m.goal));starts.add(m.position);goals.add(m.goal);assert.ok(Math.abs(mazeRoute(wallMazes[m.map],m.position,m.goal).length-1)>=8)}
  if(m.type==='symbols'){assert.equal(glyphColumns.filter(c=>m.symbols.every(x=>c.includes(x))).length,1);variants.add(m.symbols.slice().sort().join(','))}
- while(!m.done&&steps++<60){const pub=publicModule(m);let choices=m.type==='button'?['tap','double','hold']:m.type==='wire'?m.colors.map((_,i)=>i):m.type==='symbols'?m.symbols:m.type==='morse'?[m.word]:m.type==='music'?pub.choices:m.type==='memory'?[0,1,2,3]:m.type==='words'?pub.choices:m.type==='complex'?[0,1,2,3,4,'finish']:[];
+ while(!m.done&&steps++<60){const pub=publicModule(m);let choices=m.type==='button'?['tap','double','hold']:m.type==='wire'?m.colors.map((_,i)=>i):m.type==='symbols'?m.symbols:m.type==='morse'?(m.options?m.options.map((_,i)=>i):[m.word]):m.type==='music'?pub.choices:m.type==='memory'?[0,1,2,3]:m.type==='words'?pub.choices:m.type==='complex'?[0,1,2,3,4,'finish']:[];
  if(m.type==='maze'){const path=mazeRoute(wallMazes[m.map],m.position,m.goal),next=path[1],diff=next-m.position;choices=[diff===1?'right':diff===-1?'left':diff===6?'down':'up']}
  let selected=false;for(const a of choices){const trial=structuredClone(m);if(answer(trial,a,serial)){Object.assign(m,trial);selected=true;break}}assert.ok(selected,`${m.type} unsolvable seed ${seed}`)}assert.ok(m.done);tested++;
 }
@@ -30,3 +30,15 @@ assert.equal(wallMazes.length,9);assert.equal(new Set(wallMazeMarkers.map(x=>x.j
 for(const [map,edges] of wallMazes.entries()){assert.equal(edges.length,35);for(let a=0;a<36;a++){assert.ok(mazeRoute(edges,0,a).length);for(const [direction,d] of Object.entries({up:-6,down:6,left:-1,right:1})){const b=a+d,expected=edges.some(([x,y])=>(x===a&&y===b)||(y===a&&x===b));const m={type:'maze',version:3,map,position:a,goal:35};assert.equal(answer(m,direction,'KV1234'),expected);if(!expected)assert.equal(m.position,a)}}}
 assert.deepEqual(mazeRoute(wallMazes[2],3,15),[3,9,10,4,5,11,17,23,29,35,34,28,22,16,15]);
 console.log('PASS: 9 connected wall maps, 1296 directional moves, wall rejection, reference map 3 route, no walls exposed to operator.');
+
+const morseModule=makeModules(2,17).find(m=>m.type==='morse');
+const morsePublic=publicModule(morseModule);
+assert.equal(morseModule.options.length,morsePictures.length);
+assert.equal(morsePublic.choices.length,morsePictures.length);
+assert.equal('word' in morsePublic,false);
+assert.equal(answer(morseModule,morseModule.options.indexOf(morseModule.word),'KV1234'),true);
+assert.ok(wordColumns.every(column=>column.includes('빈칸')&&column.includes('')));
+assert.ok(wordColumns.every(column=>column.some(value=>value.startsWith('@circle:'))));
+assert.ok(wordColumns.every(column=>column.some(value=>value.startsWith('@arrow:'))));
+assert.ok(wordColumns.every(column=>column.some(value=>/^(왼쪽|오른쪽)/.test(value))));
+console.log('PASS: Morse picture choices hide the answer; every wordplay set includes labeled and truly empty blanks.');

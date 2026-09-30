@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect -- Workshop responses are runtime-validated JSON; connection effects reset state when the workshop changes. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ShieldCheck, BookOpen } from 'lucide-react';
 export function Header({ participant = false }: { participant?: boolean }) {
@@ -6,14 +7,13 @@ export function Header({ participant = false }: { participant?: boolean }) {
 }
 export function useWorkshop(id: string) {
   const [data, setData] = useState<any>(null), [requestError, setRequestError] = useState(''), [connectionError, setConnectionError] = useState('');
-  const [busy, setBusy] = useState(false), [clock, setClock] = useState(Date.now());
-  const offset = useRef(0), mutation = useRef(false), identity = useRef(id), live = useRef(true);
-  identity.current = id;
+  const [busy, setBusy] = useState(false), [clock, setClock] = useState(()=>Date.now());
+  const offset = useRef(0), mutation = useRef(false), live = useRef(true);
   const receive = useCallback((d: any, requestId: string) => {
-    if (!live.current || requestId !== identity.current) return;
+    if (!live.current || requestId !== id) return;
     if (Number.isFinite(d.serverNow)) offset.current = d.serverNow - Date.now();
     setData((prev: any) => !prev || prev.id !== d.id || d.revision >= prev.revision ? d : prev);
-  }, []);
+  }, [id]);
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   useEffect(() => {
     let cancelled = false; let timer: ReturnType<typeof setTimeout>; let abort: AbortController;
