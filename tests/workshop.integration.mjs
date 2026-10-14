@@ -13,6 +13,22 @@ function client() {
   };
 }
 const admin = client(), operator = client(), decoder = client(), stranger = client();
+
+// Instructor codes create isolated control rooms and reopen the same room from another browser.
+const instructorA=client(),instructorASecondDevice=client(),instructorB=client();
+let coded=await instructorA('POST','open-instructor',{code:'1004',round:1,minutes:5,teams:3,title:'인사팀 디코딩 미션 관제실'});
+assert.equal(coded.status,200);assert.equal(coded.data.admin,true);assert.equal(coded.data.result.reopened,false);
+const codedId=coded.data.id;
+assert.equal(coded.data.title,'인사팀 디코딩 미션 관제실');assert.equal(coded.data.rooms.length,3);
+assert.equal('instructorCodeHash' in coded.data,false);assert.equal('authorizedHosts' in coded.data,false);
+let reopened=await instructorASecondDevice('POST','open-instructor',{code:'1004',round:9,minutes:60,teams:30,title:'덮어쓰면 안 됨'});
+assert.equal(reopened.status,200);assert.equal(reopened.data.result.reopened,true);assert.equal(reopened.data.id,codedId);assert.equal(reopened.data.title,'인사팀 디코딩 미션 관제실');assert.equal(reopened.data.rooms.length,3);
+assert.equal((await instructorA('GET','',{id:codedId})).data.admin,true,'the original instructor browser remains authorized');
+assert.equal((await instructorASecondDevice('POST','configure',{id:codedId,round:2,minutes:7,run:reopened.data.run})).status,200);
+const isolated=await instructorB('POST','open-instructor',{code:'2004',round:1,minutes:5,teams:2,title:'설계팀 디코딩 미션 관제실'});
+assert.equal(isolated.status,200);assert.notEqual(isolated.data.id,codedId);assert.equal(isolated.data.rooms.length,2);
+assert.equal((await instructorB('POST','open-instructor',{code:'12',round:1,minutes:5,teams:2})).status,400);
+
 let r = await admin('POST', 'create', { round: 1, minutes: 1, teams: 2, title: '자동 검증' });
 assert.equal(r.status, 200, JSON.stringify(r.data)); const id = r.data.id;
 assert.equal(r.data.admin, true);
@@ -52,6 +68,31 @@ assert.ok(attempts.every(r=>r.status===200));r=await operator('GET','',{id});ass
 assert.ok(r.data.me);assert.equal((await operator('POST','leave',{id})).status,200);
 assert.equal((await stranger('POST','join',{id,name:'새 현장',room:0,role:'operator'})).status,200);
 r=await admin('POST','start',{id,round:1,minutes:1});
+
+// An instructor can hand an active team to a replacement phone without losing score or progress.
+const emergencyAdmin=client(),oldPhone=client(),newPhone=client(),unapprovedPhone=client();
+let emergency=await emergencyAdmin('POST','create',{round:1,minutes:5,teams:1,title:'비상 재접속 검증'});
+const emergencyId=emergency.data.id;
+const oldJoin=await oldPhone('POST','join',{id:emergencyId,name:'준',room:0,role:'operator'});
+assert.equal(oldJoin.status,200);
+assert.equal((await unapprovedPhone('POST','adjust-score',{id:emergencyId,room:0,delta:2000})).status,403);
+emergency=await emergencyAdmin('POST','start',{id:emergencyId,round:1,minutes:5,run:emergency.data.run});
+const emergencyRun=emergency.data.run;
+emergency=await emergencyAdmin('POST','adjust-score',{id:emergencyId,room:0,delta:2000,run:emergencyRun});
+assert.equal(emergency.status,200);assert.equal(emergency.data.rooms[0].score,2000);assert.equal(emergency.data.rooms[0].roundScore,2000);
+assert.equal((await newPhone('POST','join',{id:emergencyId,name:'제니',room:0,role:'operator'})).status,400);
+emergency=await emergencyAdmin('POST','replace-player',{id:emergencyId,room:0,playerId:oldJoin.data.me,run:emergencyRun});
+assert.equal(emergency.status,200);assert.equal(emergency.data.rooms[0].score,2000);assert.equal(emergency.data.rooms[0].status,'playing');assert.equal(emergency.data.rooms[0].modules.length,3);
+const publicEmergencyView=await unapprovedPhone('GET','',{id:emergencyId});
+assert.equal('emergencyJoin' in publicEmergencyView.data.rooms[0],false);
+assert.equal((await oldPhone('GET','',{id:emergencyId})).data.me,undefined);
+const replacement=await newPhone('POST','join',{id:emergencyId,name:'제니',room:0,role:'operator'});
+assert.equal(replacement.status,200);assert.equal(replacement.data.rooms[0].score,2000);assert.equal(replacement.data.rooms[0].status,'playing');assert.equal(replacement.data.rooms[0].modules.length,3);
+assert.equal((await unapprovedPhone('POST','join',{id:emergencyId,name:'민수',room:0,role:'operator'})).status,400);
+emergency=await emergencyAdmin('POST','adjust-score',{id:emergencyId,room:0,delta:-300,run:emergencyRun});
+assert.equal(emergency.data.rooms[0].score,1700);assert.equal(emergency.data.rooms[0].roundScore,1700);
+await emergencyAdmin('POST','end',{id:emergencyId,run:emergencyRun});
+
 fs.mkdirSync('work',{recursive:true});fs.writeFileSync('work/final-timeout.json',JSON.stringify({id,endsAt:r.data.endsAt}));
-console.log('PASS: nine round compositions, participant sync, atomic start settings, pause/resume/end including paused end, server-side host permissions, decoder separation, stale control rejection, concurrent strikes, reconnect and role change.');
+console.log('PASS: nine round compositions, participant sync, atomic start settings, pause/resume/end including paused end, server-side host permissions, decoder separation, stale control rejection, concurrent strikes, reconnect and role change, instructor-only active phone replacement with score and progress preservation, hidden emergency permits, and manual score correction.');
 console.log('Timeout test started; its completion is checked separately.');

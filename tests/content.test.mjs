@@ -52,3 +52,17 @@ assert.equal(answer(arrowDirection,8,'KV1234'),true,'southeast arrow selects bot
 const ordinaryLabel={type:'words',wordVersion:2,done:false,stage:0,columns:[0],rows:[0],orders:[wordOrder]};
 assert.equal(answer(ordinaryLabel,8,'KV1234'),true,'ordinary symbol selects the button carrying the matching item');
 console.log('PASS: Morse choices hide the answer; wordplay has distinct stages, moving circles, arrows, red position numbers, and two kinds of blanks.');
+
+const workshopApi=fs.readFileSync('app/api/workshop/route.ts','utf8');
+const facilitatorUi=fs.readFileSync('app/console.tsx','utf8');
+for(const action of ["b.action === 'replace-player'","b.action === 'adjust-score'"])assert.ok(workshopApi.includes(action));
+for(const label of ['팀 관리','접속 교체 허용','비상 점수 조정'])assert.ok(facilitatorUi.includes(label));
+assert.ok(workshopApi.includes("admin && emergencyJoin"),'emergency join permits must only be returned to the instructor');
+assert.ok(workshopApi.includes("delete w.rooms[room].emergencyJoin"),'an emergency permit must be single-use');
+console.log('PASS: instructor-only selected-team emergency replacement and score controls are present; replacement permits stay hidden and are single-use.');
+
+assert.ok(workshopApi.includes("b.action === 'open-instructor'"));
+assert.ok(workshopApi.includes("json_extract(data, '$.instructorCodeHash')"));
+assert.ok(facilitatorUi.includes('강사 고유 코드'));assert.ok(facilitatorUi.includes('관제실 열기'));
+assert.ok(workshopApi.includes('...publicWorkshop'),'instructor authentication hashes must not be returned to browsers');
+console.log('PASS: unique instructor codes create or reopen isolated control rooms without exposing authentication hashes.');

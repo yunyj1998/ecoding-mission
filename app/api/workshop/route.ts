@@ -13,18 +13,29 @@ async function ownerHash(token: string) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
   return 'host:' + Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
 }
+async function instructorHash(code: string) {
+  if (!/^\d{4,12}$/.test(code)) return '';
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`decoding-mission-instructor:${code}`));
+  return 'instructor:' + Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+}
 function response(w: any, token: string, admin: boolean, revision: number, req: Request, extra: any = {}, hostToken?: string) {
   expire(w);
   const me = w.players.find((p: any) => p.token === token);
+  const publicWorkshop = { ...w };
+  delete publicWorkshop.instructorCodeHash;
+  delete publicWorkshop.authorizedHosts;
   const headers = new Headers({ 'Cache-Control': 'no-store' });
   const flags = `; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000${new URL(req.url).protocol === 'https:' ? '; Secure' : ''}`;
   if (extra.setPlayer) headers.append('Set-Cookie', `mission_player=${token}${flags}`);
   if (hostToken) headers.append('Set-Cookie', `mission_host=${hostToken}${flags}`);
   return Response.json({
-    ...w, revision, admin, me: me?.id, serverNow: Date.now(),
+    ...publicWorkshop, revision, admin, me: me?.id, serverNow: Date.now(),
     legacyWorkshop: !!extra.legacyWorkshop,
     players: w.players.map((p: any) => ({ id: p.id, name: p.name, room: p.room, role: p.role, lastSeen: p.lastSeen })),
-    rooms: w.rooms.map((r: any) => ({ ...r, modules: r.modules.map((m: any) => admin || (me?.role === 'operator' && me.room === r.id) ? publicModule(m) : { type: m.type, done: m.done, stage: m.stage }) })),
+    rooms: w.rooms.map((r: any) => {
+      const { emergencyJoin, ...room } = r;
+      return { ...room, ...(admin && emergencyJoin ? { emergencyJoin } : {}), modules: r.modules.map((m: any) => admin || (me?.role === 'operator' && me.room === r.id) ? publicModule(m) : { type: m.type, done: m.done, stage: m.stage }) };
+    }),
     ...(extra.result ? { result: extra.result } : {}),
   }, { headers });
 }
@@ -45,8 +56,9 @@ export async function GET(req: Request) {
     const row = await db().prepare('SELECT * FROM workshops WHERE id = ?').bind(id).first<any>();
     if (!row) return fail('워크숍을 찾을 수 없습니다. 입장 코드를 확인하세요.', 404);
     const owner = await ownerHash(cookie(req, 'mission_host'));
-    const admin = !!owner && row.owner === owner;
-    return response(JSON.parse(row.data), cookie(req, 'mission_player'), admin, row.revision ?? 0, req, { legacyWorkshop: !String(row.owner).startsWith('host:') });
+    const w = JSON.parse(row.data);
+    const admin = !!owner && (row.owner === owner || w.authorizedHosts?.includes(owner));
+    return response(w, cookie(req, 'mission_player'), admin, row.revision ?? 0, req, { legacyWorkshop: !String(row.owner).startsWith('host:') });
   } catch (e) { console.error('workshop read', e); return fail('연결에 실패했습니다. 잠시 후 다시 시도하세요.', 503); }
 }
 export async function POST(req: Request) {
@@ -58,6 +70,29 @@ export async function POST(req: Request) {
     if (!/^[a-f0-9-]{36}$/.test(token)) token = crypto.randomUUID();
     const hostToken = cookie(req, 'mission_host');
     const owner = await ownerHash(hostToken);
+    if (b.action === 'open-instructor') {
+      const codeHash = await instructorHash(String(b.code || '').trim());
+      if (!codeHash) return fail('강사 코드는 숫자 4~12자리로 입력하세요.');
+      const existing = await db().prepare("SELECT * FROM workshops WHERE json_extract(data, '$.instructorCodeHash') = ? ORDER BY json_extract(data, '$.createdAt') DESC LIMIT 1").bind(codeHash).first<any>();
+      const sessionToken = owner ? hostToken : crypto.randomUUID(), sessionHash = await ownerHash(sessionToken);
+      if (existing) {
+        const w = JSON.parse(existing.data), revision = Number(existing.revision) || 0;
+        w.authorizedHosts = [...new Set([...(Array.isArray(w.authorizedHosts) ? w.authorizedHosts : []), sessionHash])].slice(-20);
+        const saved = await db().prepare('UPDATE workshops SET data = ?, revision = ? WHERE id = ? AND COALESCE(revision,0) = ?').bind(JSON.stringify(w), revision + 1, w.id, revision).run();
+        if (!saved.meta.changes) return fail('다른 강사가 관제실을 여는 중입니다. 잠시 후 다시 시도하세요.', 409);
+        return response(w, token, true, revision + 1, req, { result: { reopened: true } }, sessionToken);
+      }
+      const config = settings(b.round, b.minutes), n = Number(b.teams);
+      if (!config || !Number.isInteger(n) || n < 1 || n > 30) return fail('팀 수·라운드·제한 시간을 확인하세요.');
+      const id = crypto.randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase();
+      const w = {
+        id, title: String(b.title || '디코딩 미션 관제실').trim().slice(0, 80), ...config, createdAt: Date.now(), instructorCodeHash: codeHash,
+        authorizedHosts: [sessionHash], remaining: config.duration, status: 'waiting', endsAt: 0, run: 0, players: [],
+        rooms: Array.from({ length: n }, (_, i) => ({ id: i, name: teamNames[i] || `TEAM ${i + 1}`, serial: `KVO${i + 1}8`, strikes: 0, score: 0, roundScore: 0, timeBonus: 0, status: 'waiting', modules: [] })),
+      };
+      await db().prepare('INSERT INTO workshops (id,owner,revision,data) VALUES (?,?,0,?)').bind(id, sessionHash, JSON.stringify(w)).run();
+      return response(w, token, true, 0, req, { result: { reopened: false } }, sessionToken);
+    }
     if (b.action === 'create') {
       const config = settings(b.round, b.minutes), n = Number(b.teams);
       if (!config || !Number.isInteger(n) || n < 1 || n > 30) return fail('팀 수·라운드·제한 시간을 확인하세요.');
@@ -74,16 +109,19 @@ export async function POST(req: Request) {
     for (let attempt = 0; attempt < 8; attempt++) {
       const row = await db().prepare('SELECT * FROM workshops WHERE id = ?').bind(String(b.id)).first<any>();
       if (!row) return fail('워크숍을 찾을 수 없습니다.', 404);
-      const w = JSON.parse(row.data), admin = !!owner && row.owner === owner, now = Date.now();
+      const w = JSON.parse(row.data), admin = !!owner && (row.owner === owner || w.authorizedHosts?.includes(owner)), now = Date.now();
       let player = w.players.find((p: any) => p.token === token), result: any = {};
       expire(w, now);
       if (b.action === 'join') {
-        if (!['waiting', 'ended'].includes(w.status)) return fail('라운드 진행 중입니다. 다음 라운드에 입장하세요.');
         const name = String(b.name ?? '').trim().slice(0, 20), room = Number(b.room), role = b.role;
         if (!name || !Number.isInteger(room) || !w.rooms[room] || !['operator', 'decoder'].includes(role)) return fail('닉네임·팀·역할을 확인하세요.');
+        const permit = w.rooms[room].emergencyJoin;
+        const emergency = ['running', 'paused'].includes(w.status) && permit?.role === role && Number(permit.expiresAt) >= now;
+        if (!['waiting', 'ended'].includes(w.status) && !emergency) return fail('라운드 진행 중입니다. 휴대폰 교체가 필요하면 강사에게 재접속 허용을 요청하세요.');
         if (role === 'operator' && w.players.some((p: any) => p.room === room && p.role === role && p.token !== token)) return fail('이 팀의 현장전문가가 이미 있습니다. 해독전문가로 입장하세요.');
         if (!player) { if (w.players.length >= 500) return fail('워크숍 참가 인원이 가득 찼습니다.'); player = { id: crypto.randomUUID(), token }; w.players.push(player); }
         Object.assign(player, { name, room, role, lastSeen: now });
+        if (emergency) delete w.rooms[room].emergencyJoin;
       } else if (b.action === 'heartbeat') {
         if (!player) return fail('먼저 입장하세요.', 401);
         player.lastSeen = now;
@@ -140,6 +178,23 @@ export async function POST(req: Request) {
           w.remaining = w.status === 'running' ? Math.max(0, w.endsAt - now) : w.remaining;
           w.status = 'ended';
           for (const r of w.rooms) if (r.status === 'playing') r.status = 'failed';
+        } else if (b.action === 'replace-player') {
+          const room = Number(b.room), playerId = String(b.playerId || '');
+          if (!Number.isInteger(room) || !w.rooms[room]) return fail('관리할 팀을 확인하세요.');
+          const current = w.players.find((p: any) => p.id === playerId && p.room === room);
+          if (!current) return fail('참가자가 이미 나갔거나 다른 팀으로 이동했습니다.', 409);
+          w.players = w.players.filter((p: any) => p.id !== current.id);
+          if (['running', 'paused'].includes(w.status)) w.rooms[room].emergencyJoin = { role: current.role, expiresAt: now + 15 * 60000 };
+          else delete w.rooms[room].emergencyJoin;
+          result = { room, releasedName: current.name, role: current.role, score: w.rooms[room].score };
+        } else if (b.action === 'adjust-score') {
+          const room = Number(b.room), delta = Number(b.delta);
+          if (!Number.isInteger(room) || !w.rooms[room]) return fail('점수를 조정할 팀을 확인하세요.');
+          if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 10000) return fail('점수는 1점부터 10,000점까지 정수로 조정할 수 있습니다.');
+          const r = w.rooms[room], applied = Math.max(-Number(r.score || 0), delta);
+          r.score = Number(r.score || 0) + applied;
+          r.roundScore = Math.max(0, Number(r.roundScore || 0) + applied);
+          result = { room, delta: applied, score: r.score, roundScore: r.roundScore };
         } else return fail('지원하지 않는 동작입니다.');
       }
       const revision = Number(row.revision) || 0;
