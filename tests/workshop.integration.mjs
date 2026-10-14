@@ -16,10 +16,10 @@ const admin = client(), operator = client(), decoder = client(), stranger = clie
 
 // Instructor codes create isolated control rooms and reopen the same room from another browser.
 const instructorA=client(),instructorASecondDevice=client(),instructorB=client(),codedParticipant=client();
-let coded=await instructorA('POST','open-instructor',{code:'1004',instructorName:'이서호',roomName:'인사팀',round:1,minutes:5,teams:3});
+let coded=await instructorA('POST','open-instructor',{code:'1004',instructorName:'이주연',roomName:'인사팀',round:1,minutes:5,teams:3});
 assert.equal(coded.status,200);assert.equal(coded.data.admin,true);assert.equal(coded.data.result.reopened,false);
 const codedId=coded.data.id;
-assert.equal(coded.data.title,'인사팀 워크숍 관제실');assert.equal(coded.data.instructorName,'이서호');assert.equal(coded.data.rooms.length,3);
+assert.equal(coded.data.title,'인사팀 워크숍 관제실');assert.equal(coded.data.instructorName,'이주연');assert.equal(coded.data.rooms.length,3);
 assert.equal('instructorCodeHash' in coded.data,false);assert.equal('authorizedHosts' in coded.data,false);
 let reopened=await instructorASecondDevice('POST','open-instructor',{code:'1004',instructorName:'베타 강사',roomName:'덮어쓰면 안 됨',round:9,minutes:60,teams:30});
 assert.equal(reopened.status,200);assert.equal(reopened.data.result.reopened,true);assert.equal(reopened.data.id,codedId);assert.equal(reopened.data.title,'인사팀 워크숍 관제실');assert.equal(reopened.data.instructorName,'베타 강사');assert.equal(reopened.data.rooms.length,3);

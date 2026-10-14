@@ -66,7 +66,7 @@ assert.ok(workshopApi.includes("b.action === 'open-instructor'"));
 assert.ok(workshopApi.includes("json_extract(data, '$.instructorCodeHash')"));
 assert.ok(facilitatorUi.includes('강사 이름'));assert.ok(facilitatorUi.includes('강사 코드'));assert.ok(facilitatorUi.includes('방 이름'));
 assert.ok(workshopApi.includes("b.action === 'reset-workshop'"));assert.ok(workshopApi.includes("b.action === 'setup-workshop'"));
-assert.ok(facilitatorUi.includes('운영 전체 초기화'));assert.ok(facilitatorUi.includes('로그인 · 관제실 열기'));
+assert.ok(facilitatorUi.includes('운영 전체 초기화'));assert.ok(facilitatorUi.includes('로그인 · 관제실 열기'));assert.ok(facilitatorUi.includes('예: 이주연'));assert.ok(facilitatorUi.includes("setId('')"));assert.ok(!facilitatorUi.includes('다음 워크숍을 설정하세요'));
 assert.ok(workshopApi.includes('...publicWorkshop'),'instructor authentication hashes must not be returned to browsers');
 assert.ok(workshopApi.includes('delete publicWorkshop.instructorName'),'instructor names must only be returned to the instructor');
 console.log('PASS: beta instructor login and reusable reset/setup flow are present without exposing authentication hashes.');
