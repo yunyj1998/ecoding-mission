@@ -116,12 +116,13 @@ export async function POST(req: Request) {
         const name = String(b.name ?? '').trim().slice(0, 20), room = Number(b.room), role = b.role;
         if (!name || !Number.isInteger(room) || !w.rooms[room] || !['operator', 'decoder'].includes(role)) return fail('닉네임·팀·역할을 확인하세요.');
         const permit = w.rooms[room].emergencyJoin;
-        const emergency = ['running', 'paused'].includes(w.status) && permit?.role === role && Number(permit.expiresAt) >= now;
+        const emergency = permit?.role === role && permit?.unlimited === true;
         if (!['waiting', 'ended'].includes(w.status) && !emergency) return fail('라운드 진행 중입니다. 휴대폰 교체가 필요하면 강사에게 재접속 허용을 요청하세요.');
-        if (role === 'operator' && w.players.some((p: any) => p.room === room && p.role === role && p.token !== token)) return fail('이 팀의 현장전문가가 이미 있습니다. 해독전문가로 입장하세요.');
+        const occupied = role === 'operator' ? w.players.find((p: any) => p.room === room && p.role === role && p.token !== token) : null;
+        if (occupied && !emergency) return fail('이 팀의 현장전문가가 이미 있습니다. 해독전문가로 입장하세요.');
+        if (occupied && emergency) w.players = w.players.filter((p: any) => p.id !== occupied.id);
         if (!player) { if (w.players.length >= 500) return fail('워크숍 참가 인원이 가득 찼습니다.'); player = { id: crypto.randomUUID(), token }; w.players.push(player); }
         Object.assign(player, { name, room, role, lastSeen: now });
-        if (emergency) delete w.rooms[room].emergencyJoin;
       } else if (b.action === 'heartbeat') {
         if (!player) return fail('먼저 입장하세요.', 401);
         player.lastSeen = now;
@@ -184,8 +185,7 @@ export async function POST(req: Request) {
           const current = w.players.find((p: any) => p.id === playerId && p.room === room);
           if (!current) return fail('참가자가 이미 나갔거나 다른 팀으로 이동했습니다.', 409);
           w.players = w.players.filter((p: any) => p.id !== current.id);
-          if (['running', 'paused'].includes(w.status)) w.rooms[room].emergencyJoin = { role: current.role, expiresAt: now + 15 * 60000 };
-          else delete w.rooms[room].emergencyJoin;
+          w.rooms[room].emergencyJoin = { role: current.role, unlimited: true };
           result = { room, releasedName: current.name, role: current.role, score: w.rooms[room].score };
         } else if (b.action === 'adjust-score') {
           const room = Number(b.room), delta = Number(b.delta);

@@ -88,11 +88,13 @@ assert.equal('emergencyJoin' in publicEmergencyView.data.rooms[0],false);
 assert.equal((await oldPhone('GET','',{id:emergencyId})).data.me,undefined);
 const replacement=await newPhone('POST','join',{id:emergencyId,name:'제니',room:0,role:'operator'});
 assert.equal(replacement.status,200);assert.equal(replacement.data.rooms[0].score,2000);assert.equal(replacement.data.rooms[0].status,'playing');assert.equal(replacement.data.rooms[0].modules.length,3);
-assert.equal((await unapprovedPhone('POST','join',{id:emergencyId,name:'민수',room:0,role:'operator'})).status,400);
+const repeatedReplacement=await unapprovedPhone('POST','join',{id:emergencyId,name:'민수',room:0,role:'operator'});
+assert.equal(repeatedReplacement.status,200);assert.equal(repeatedReplacement.data.rooms[0].score,2000);assert.equal(repeatedReplacement.data.rooms[0].status,'playing');assert.equal(repeatedReplacement.data.rooms[0].modules.length,3);
+assert.equal((await newPhone('GET','',{id:emergencyId})).data.me,undefined);
 emergency=await emergencyAdmin('POST','adjust-score',{id:emergencyId,room:0,delta:-300,run:emergencyRun});
 assert.equal(emergency.data.rooms[0].score,1700);assert.equal(emergency.data.rooms[0].roundScore,1700);
 await emergencyAdmin('POST','end',{id:emergencyId,run:emergencyRun});
 
 fs.mkdirSync('work',{recursive:true});fs.writeFileSync('work/final-timeout.json',JSON.stringify({id,endsAt:r.data.endsAt}));
-console.log('PASS: nine round compositions, participant sync, atomic start settings, pause/resume/end including paused end, server-side host permissions, decoder separation, stale control rejection, concurrent strikes, reconnect and role change, instructor-only active phone replacement with score and progress preservation, hidden emergency permits, and manual score correction.');
+console.log('PASS: nine round compositions, participant sync, atomic start settings, pause/resume/end including paused end, server-side host permissions, decoder separation, stale control rejection, concurrent strikes, reconnect and role change, instructor-authorized repeated phone replacement with score and progress preservation, hidden emergency permits, and manual score correction.');
 console.log('Timeout test started; its completion is checked separately.');

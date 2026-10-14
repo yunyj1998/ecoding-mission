@@ -58,8 +58,9 @@ const facilitatorUi=fs.readFileSync('app/console.tsx','utf8');
 for(const action of ["b.action === 'replace-player'","b.action === 'adjust-score'"])assert.ok(workshopApi.includes(action));
 for(const label of ['팀 관리','접속 교체 허용','비상 점수 조정'])assert.ok(facilitatorUi.includes(label));
 assert.ok(workshopApi.includes("admin && emergencyJoin"),'emergency join permits must only be returned to the instructor');
-assert.ok(workshopApi.includes("delete w.rooms[room].emergencyJoin"),'an emergency permit must be single-use');
-console.log('PASS: instructor-only selected-team emergency replacement and score controls are present; replacement permits stay hidden and are single-use.');
+assert.ok(workshopApi.includes("unlimited: true"),'instructor-authorized replacement must remain active without a time limit');
+assert.ok(workshopApi.includes("occupied && emergency"),'an active replacement window must support repeated operator handoffs');
+console.log('PASS: instructor-only selected-team emergency replacement and score controls are present; replacement permits stay hidden and allow repeated handoffs.');
 
 assert.ok(workshopApi.includes("b.action === 'open-instructor'"));
 assert.ok(workshopApi.includes("json_extract(data, '$.instructorCodeHash')"));
