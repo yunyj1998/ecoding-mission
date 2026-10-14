@@ -15,19 +15,27 @@ function client() {
 const admin = client(), operator = client(), decoder = client(), stranger = client();
 
 // Instructor codes create isolated control rooms and reopen the same room from another browser.
-const instructorA=client(),instructorASecondDevice=client(),instructorB=client();
-let coded=await instructorA('POST','open-instructor',{code:'1004',round:1,minutes:5,teams:3,title:'인사팀 디코딩 미션 관제실'});
+const instructorA=client(),instructorASecondDevice=client(),instructorB=client(),codedParticipant=client();
+let coded=await instructorA('POST','open-instructor',{code:'1004',instructorName:'이서호',roomName:'인사팀',round:1,minutes:5,teams:3});
 assert.equal(coded.status,200);assert.equal(coded.data.admin,true);assert.equal(coded.data.result.reopened,false);
 const codedId=coded.data.id;
-assert.equal(coded.data.title,'인사팀 디코딩 미션 관제실');assert.equal(coded.data.rooms.length,3);
+assert.equal(coded.data.title,'인사팀 워크숍 관제실');assert.equal(coded.data.instructorName,'이서호');assert.equal(coded.data.rooms.length,3);
 assert.equal('instructorCodeHash' in coded.data,false);assert.equal('authorizedHosts' in coded.data,false);
-let reopened=await instructorASecondDevice('POST','open-instructor',{code:'1004',round:9,minutes:60,teams:30,title:'덮어쓰면 안 됨'});
-assert.equal(reopened.status,200);assert.equal(reopened.data.result.reopened,true);assert.equal(reopened.data.id,codedId);assert.equal(reopened.data.title,'인사팀 디코딩 미션 관제실');assert.equal(reopened.data.rooms.length,3);
+let reopened=await instructorASecondDevice('POST','open-instructor',{code:'1004',instructorName:'베타 강사',roomName:'덮어쓰면 안 됨',round:9,minutes:60,teams:30});
+assert.equal(reopened.status,200);assert.equal(reopened.data.result.reopened,true);assert.equal(reopened.data.id,codedId);assert.equal(reopened.data.title,'인사팀 워크숍 관제실');assert.equal(reopened.data.instructorName,'베타 강사');assert.equal(reopened.data.rooms.length,3);
 assert.equal((await instructorA('GET','',{id:codedId})).data.admin,true,'the original instructor browser remains authorized');
 assert.equal((await instructorASecondDevice('POST','configure',{id:codedId,round:2,minutes:7,run:reopened.data.run})).status,200);
-const isolated=await instructorB('POST','open-instructor',{code:'2004',round:1,minutes:5,teams:2,title:'설계팀 디코딩 미션 관제실'});
+assert.equal((await codedParticipant('POST','join',{id:codedId,name:'참가자',room:0,role:'operator'})).status,200);
+assert.equal('instructorName' in (await codedParticipant('GET','',{id:codedId})).data,false);
+assert.equal((await instructorASecondDevice('POST','adjust-score',{id:codedId,room:0,delta:2000})).data.rooms[0].score,2000);
+let reset=await instructorASecondDevice('POST','reset-workshop',{id:codedId,run:reopened.data.run});
+assert.equal(reset.status,200);assert.equal(reset.data.needsSetup,true);assert.equal(reset.data.title,'');assert.equal(reset.data.players.length,0);assert.equal(reset.data.rooms.length,0);assert.equal(reset.data.instructorName,'베타 강사');
+assert.equal((await codedParticipant('POST','join',{id:codedId,name:'이전 참가자',room:0,role:'operator'})).status,409);
+reset=await instructorASecondDevice('POST','setup-workshop',{id:codedId,roomName:'회계팀',round:1,minutes:5,teams:2,run:reset.data.run});
+assert.equal(reset.status,200);assert.equal(reset.data.needsSetup,false);assert.equal(reset.data.title,'회계팀 워크숍 관제실');assert.equal(reset.data.rooms.length,2);assert.ok(reset.data.rooms.every(room=>room.score===0));
+const isolated=await instructorB('POST','open-instructor',{code:'2004',instructorName:'아무 강사',roomName:'설계팀',round:1,minutes:5,teams:2});
 assert.equal(isolated.status,200);assert.notEqual(isolated.data.id,codedId);assert.equal(isolated.data.rooms.length,2);
-assert.equal((await instructorB('POST','open-instructor',{code:'12',round:1,minutes:5,teams:2})).status,400);
+assert.equal((await instructorB('POST','open-instructor',{code:'12',instructorName:'강사',roomName:'방',round:1,minutes:5,teams:2})).status,400);
 
 let r = await admin('POST', 'create', { round: 1, minutes: 1, teams: 2, title: '자동 검증' });
 assert.equal(r.status, 200, JSON.stringify(r.data)); const id = r.data.id;

@@ -14,9 +14,22 @@ async function ownerHash(token: string) {
   return 'host:' + Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
 }
 async function instructorHash(code: string) {
-  if (!/^\d{4,12}$/.test(code)) return '';
+  if (!/^[1-9]\d{3}$/.test(code)) return '';
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`decoding-mission-instructor:${code}`));
   return 'instructor:' + Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+}
+function instructorName(value: unknown) {
+  const name = String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, 30);
+  return name.length >= 2 ? name : '';
+}
+function workshopRoomName(value: unknown) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, 40);
+}
+function workshopTitle(roomName: string) {
+  return `${roomName} 워크숍 관제실`;
+}
+function makeRooms(count: number) {
+  return Array.from({ length: count }, (_, i) => ({ id: i, name: teamNames[i] || `TEAM ${i + 1}`, serial: `KVO${i + 1}8`, strikes: 0, score: 0, roundScore: 0, timeBonus: 0, status: 'waiting', modules: [] }));
 }
 function response(w: any, token: string, admin: boolean, revision: number, req: Request, extra: any = {}, hostToken?: string) {
   expire(w);
@@ -24,12 +37,13 @@ function response(w: any, token: string, admin: boolean, revision: number, req: 
   const publicWorkshop = { ...w };
   delete publicWorkshop.instructorCodeHash;
   delete publicWorkshop.authorizedHosts;
+  delete publicWorkshop.instructorName;
   const headers = new Headers({ 'Cache-Control': 'no-store' });
   const flags = `; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000${new URL(req.url).protocol === 'https:' ? '; Secure' : ''}`;
   if (extra.setPlayer) headers.append('Set-Cookie', `mission_player=${token}${flags}`);
   if (hostToken) headers.append('Set-Cookie', `mission_host=${hostToken}${flags}`);
   return Response.json({
-    ...publicWorkshop, revision, admin, me: me?.id, serverNow: Date.now(),
+    ...publicWorkshop, revision, admin, ...(admin && w.instructorName ? { instructorName: w.instructorName } : {}), me: me?.id, serverNow: Date.now(),
     legacyWorkshop: !!extra.legacyWorkshop,
     players: w.players.map((p: any) => ({ id: p.id, name: p.name, room: p.room, role: p.role, lastSeen: p.lastSeen })),
     rooms: w.rooms.map((r: any) => {
@@ -72,23 +86,31 @@ export async function POST(req: Request) {
     const owner = await ownerHash(hostToken);
     if (b.action === 'open-instructor') {
       const codeHash = await instructorHash(String(b.code || '').trim());
-      if (!codeHash) return fail('강사 코드는 숫자 4~12자리로 입력하세요.');
+      if (!codeHash) return fail('베타 강사 코드는 1000~9999의 네 자리 숫자로 입력하세요.');
+      const name = instructorName(b.instructorName);
+      if (!name) return fail('강사 이름을 2자 이상 입력하세요.');
       const existing = await db().prepare("SELECT * FROM workshops WHERE json_extract(data, '$.instructorCodeHash') = ? ORDER BY json_extract(data, '$.createdAt') DESC LIMIT 1").bind(codeHash).first<any>();
       const sessionToken = owner ? hostToken : crypto.randomUUID(), sessionHash = await ownerHash(sessionToken);
       if (existing) {
         const w = JSON.parse(existing.data), revision = Number(existing.revision) || 0;
+        w.instructorName = name;
+        if (w.needsSetup) {
+          const config = settings(b.round, b.minutes), n = Number(b.teams), roomName = workshopRoomName(b.roomName);
+          if (!config || !Number.isInteger(n) || n < 1 || n > 30 || !roomName) return fail('방 이름·팀 수·라운드·제한 시간을 확인하세요.');
+          Object.assign(w, config, { title: workshopTitle(roomName), roomName, needsSetup: false, remaining: config.duration, status: 'waiting', endsAt: 0, players: [], rooms: makeRooms(n) });
+        }
         w.authorizedHosts = [...new Set([...(Array.isArray(w.authorizedHosts) ? w.authorizedHosts : []), sessionHash])].slice(-20);
         const saved = await db().prepare('UPDATE workshops SET data = ?, revision = ? WHERE id = ? AND COALESCE(revision,0) = ?').bind(JSON.stringify(w), revision + 1, w.id, revision).run();
         if (!saved.meta.changes) return fail('다른 강사가 관제실을 여는 중입니다. 잠시 후 다시 시도하세요.', 409);
         return response(w, token, true, revision + 1, req, { result: { reopened: true } }, sessionToken);
       }
-      const config = settings(b.round, b.minutes), n = Number(b.teams);
-      if (!config || !Number.isInteger(n) || n < 1 || n > 30) return fail('팀 수·라운드·제한 시간을 확인하세요.');
+      const config = settings(b.round, b.minutes), n = Number(b.teams), roomName = workshopRoomName(b.roomName);
+      if (!config || !Number.isInteger(n) || n < 1 || n > 30 || !roomName) return fail('방 이름·팀 수·라운드·제한 시간을 확인하세요.');
       const id = crypto.randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase();
       const w = {
-        id, title: String(b.title || '디코딩 미션 관제실').trim().slice(0, 80), ...config, createdAt: Date.now(), instructorCodeHash: codeHash,
+        id, title: workshopTitle(roomName), roomName, instructorName: name, needsSetup: false, ...config, createdAt: Date.now(), instructorCodeHash: codeHash,
         authorizedHosts: [sessionHash], remaining: config.duration, status: 'waiting', endsAt: 0, run: 0, players: [],
-        rooms: Array.from({ length: n }, (_, i) => ({ id: i, name: teamNames[i] || `TEAM ${i + 1}`, serial: `KVO${i + 1}8`, strikes: 0, score: 0, roundScore: 0, timeBonus: 0, status: 'waiting', modules: [] })),
+        rooms: makeRooms(n),
       };
       await db().prepare('INSERT INTO workshops (id,owner,revision,data) VALUES (?,?,0,?)').bind(id, sessionHash, JSON.stringify(w)).run();
       return response(w, token, true, 0, req, { result: { reopened: false } }, sessionToken);
@@ -101,7 +123,7 @@ export async function POST(req: Request) {
       const w = {
         id, title: String(b.title || '팀 커뮤니케이션 워크숍').trim().slice(0, 80), ...config,
         remaining: config.duration, status: 'waiting', endsAt: 0, run: 0, players: [],
-        rooms: Array.from({ length: n }, (_, i) => ({ id: i, name: teamNames[i] || `TEAM ${i + 1}`, serial: `KVO${i + 1}8`, strikes: 0, score: 0, roundScore: 0, timeBonus: 0, status: 'waiting', modules: [] })),
+        rooms: makeRooms(n),
       };
       await db().prepare('INSERT INTO workshops (id,owner,revision,data) VALUES (?,?,0,?)').bind(id, await ownerHash(newHost), JSON.stringify(w)).run();
       return response(w, token, true, 0, req, {}, newHost);
@@ -113,6 +135,7 @@ export async function POST(req: Request) {
       let player = w.players.find((p: any) => p.token === token), result: any = {};
       expire(w, now);
       if (b.action === 'join') {
+        if (w.needsSetup) return fail('강사가 다음 워크숍을 설정 중입니다. 잠시 후 다시 입장하세요.', 409);
         const name = String(b.name ?? '').trim().slice(0, 20), room = Number(b.room), role = b.role;
         if (!name || !Number.isInteger(room) || !w.rooms[room] || !['operator', 'decoder'].includes(role)) return fail('닉네임·팀·역할을 확인하세요.');
         const permit = w.rooms[room].emergencyJoin;
@@ -158,6 +181,17 @@ export async function POST(req: Request) {
           const config = settings(b.round, b.minutes); if (!config) return fail('라운드와 제한 시간을 확인하세요.');
           Object.assign(w, config, { remaining: config.duration, status: 'waiting', endsAt: 0 });
           for (const r of w.rooms) Object.assign(r, { modules: [], strikes: 0, roundScore: 0, timeBonus: 0, status: 'waiting' });
+        } else if (b.action === 'setup-workshop') {
+          if (!w.needsSetup) return fail('이미 워크숍이 설정되어 있습니다.', 409);
+          const config = settings(b.round, b.minutes), n = Number(b.teams), roomName = workshopRoomName(b.roomName);
+          if (!config || !Number.isInteger(n) || n < 1 || n > 30 || !roomName) return fail('방 이름·팀 수·라운드·제한 시간을 확인하세요.');
+          Object.assign(w, config, { title: workshopTitle(roomName), roomName, needsSetup: false, remaining: config.duration, status: 'waiting', endsAt: 0, players: [], rooms: makeRooms(n) });
+          result = { reset: false, ready: true };
+        } else if (b.action === 'reset-workshop') {
+          if (!w.instructorCodeHash || !w.instructorName) return fail('강사 로그인 관제실에서만 전체 초기화할 수 있습니다.', 409);
+          if (['running', 'paused'].includes(w.status)) return fail('진행 중인 라운드를 종료한 뒤 전체 초기화하세요.');
+          Object.assign(w, { title: '', roomName: '', needsSetup: true, status: 'waiting', endsAt: 0, remaining: w.duration, run: w.run + 1, players: [], rooms: [] });
+          result = { reset: true };
         } else if (b.action === 'start') {
           if (['running', 'paused'].includes(w.status)) return fail('이미 진행 중입니다.');
           // Apply the settings and start in one database update, including when Save was not pressed.

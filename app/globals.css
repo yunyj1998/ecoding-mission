@@ -125,3 +125,5 @@ header{height:74px;background:#081419de;border-bottom:1px solid #314840}.brand{l
  .device-modal .module-words .wordplay-grid button{min-height:clamp(68px,21dvh,92px)!important;padding:24px 9px 8px!important}
  .device-modal .module-words .wordplay-grid button>span:not(.wordplay-position){font-size:16px!important;line-height:1.15!important}
 }
+
+.instructor-login{min-width:min(420px,100%)}.danger-action{border-color:#a94e5b!important;color:#ffd4da!important;background:#3f2028!important}

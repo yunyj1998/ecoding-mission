@@ -64,6 +64,9 @@ console.log('PASS: instructor-only selected-team emergency replacement and score
 
 assert.ok(workshopApi.includes("b.action === 'open-instructor'"));
 assert.ok(workshopApi.includes("json_extract(data, '$.instructorCodeHash')"));
-assert.ok(facilitatorUi.includes('강사 고유 코드'));assert.ok(facilitatorUi.includes('관제실 열기'));
+assert.ok(facilitatorUi.includes('강사 이름'));assert.ok(facilitatorUi.includes('강사 코드'));assert.ok(facilitatorUi.includes('방 이름'));
+assert.ok(workshopApi.includes("b.action === 'reset-workshop'"));assert.ok(workshopApi.includes("b.action === 'setup-workshop'"));
+assert.ok(facilitatorUi.includes('운영 전체 초기화'));assert.ok(facilitatorUi.includes('로그인 · 관제실 열기'));
 assert.ok(workshopApi.includes('...publicWorkshop'),'instructor authentication hashes must not be returned to browsers');
-console.log('PASS: unique instructor codes create or reopen isolated control rooms without exposing authentication hashes.');
+assert.ok(workshopApi.includes('delete publicWorkshop.instructorName'),'instructor names must only be returned to the instructor');
+console.log('PASS: beta instructor login and reusable reset/setup flow are present without exposing authentication hashes.');
